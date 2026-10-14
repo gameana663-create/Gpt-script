@@ -1,5 +1,5 @@
 -- Review V18 - treino dirigido ao final com memoria de tentativas
--- O objetivo inicial e provisório. Use MARCAR FINAL estando na chegada.
+-- Detecta automaticamente objetos de chegada; usa coordenada estimada se nao encontrar.
 -- Execute apenas em ambientes em que voce tem autorizacao.
 local P=game:GetService("Players")
 local W=game:GetService("Workspace")
@@ -10,7 +10,7 @@ local player=P.LocalPlayer
 if not player then return end
 if _G.ReviewV18 and _G.ReviewV18.destroy then pcall(_G.ReviewV18.destroy) end
 local bot={running=false,closed=false,goal=Vector3.new(-678.74,458.5,553.51),
- goalConfirmed=false,attempts=0,success=0,history={},best={},learned={},bad={},message="Marque o final para maior precisao"}
+ goalConfirmed=false,attempts=0,success=0,history={},best={},learned={},bad={},message="Detectando chegada automaticamente..."}
 _G.ReviewV18=bot
 local function chr()
  local c=player.Character
@@ -18,6 +18,36 @@ local function chr()
 end
 local function vec(p) return {x=math.floor(p.X*100+.5)/100,y=math.floor(p.Y*100+.5)/100,z=math.floor(p.Z*100+.5)/100} end
 local function flat(a,b) return (Vector3.new(a.X,0,a.Z)-Vector3.new(b.X,0,b.Z)).Magnitude end
+local function autoDetectGoal()
+ local names={finish=true,finishline=true,finishpart=true,finishzone=true,goal=true,goalpart=true,
+  goalzone=true,final=true,chegada=true,linhadechegada=true,finishcheckpoint=true,
+  endzone=true,victory=true,winpart=true}
+ local candidates={}
+ for _,obj in ipairs(W:GetDescendants()) do
+  local normalized=obj.Name:lower():gsub("[^%w]","")
+  if names[normalized] then
+   local pos
+   if obj:IsA("BasePart") then pos=obj.Position
+   elseif obj:IsA("Model") then pos=obj:GetPivot().Position end
+   if pos then
+    table.insert(candidates,{pos=pos,name=obj:GetFullName()})
+   end
+  end
+ end
+ if #candidates>0 then
+  -- Prefere o alvo de maior altitude em mapas verticais.
+  table.sort(candidates,function(a,b)return a.pos.Y>b.pos.Y end)
+  bot.goal=candidates[1].pos
+  bot.goalConfirmed=true
+  bot.message="Chegada detectada: "..candidates[1].name
+  return true
+ end
+ bot.goalConfirmed=false
+ bot.message="Chegada nao identificada: usando destino estimado"
+ return false
+end
+bot.detectGoal=autoDetectGoal
+autoDetectGoal()
 local function goalDist(p)
  return flat(p,bot.goal)+math.abs(p.Y-bot.goal.Y)*1.3
 end
@@ -108,7 +138,7 @@ local function button(label,x,y,w)
 end
 local start=button("INICIAR",10,120,132)
 local stop=button("PARAR",151,120,132)
-local goalButton=button("MARCAR FINAL",10,160,132)
+local goalButton=button("DETECTAR FINAL",10,160,132)
 local bestButton=button("SALVAR MELHOR",151,160,132)
 local copy=button("COPIAR JSON",10,200,132)
 local close=button("FECHAR",151,200,132)
@@ -116,7 +146,7 @@ local tip=Instance.new("TextLabel",frame)
 tip.Position=UDim2.fromOffset(10,240)
 tip.Size=UDim2.fromOffset(274,22)
 tip.BackgroundTransparency=1
-tip.Text="Treino experimental | destino editavel"
+tip.Text="Destino automatico | detectar novamente"
 tip.TextSize=11
 tip.TextColor3=Color3.fromRGB(190,190,195)
 local dragging=false
@@ -143,13 +173,9 @@ local statusConnection=R.Heartbeat:Connect(function()
   "\nMelhores: "..#bot.best.." | "..bot.message
 end)
 goalButton.MouseButton1Click:Connect(function()
- local _,_,root=chr()
- if root then
-  bot.goal=root.Position
-  bot.goalConfirmed=true
-  bot.message="Final marcado! Volte ao inicio e aperte INICIAR"
- end
+ autoDetectGoal()
 end)
+
 local function attempt(hum,root,target,mode)
  local from=root.Position
  local startTime=os.clock()
@@ -233,6 +259,7 @@ end
 start.MouseButton1Click:Connect(function()
  if bot.running then return end
  bot.running=true
+ if not bot.goalConfirmed then autoDetectGoal() end
  bot.message="Treinando ate o destino..."
  task.spawn(train)
 end)
