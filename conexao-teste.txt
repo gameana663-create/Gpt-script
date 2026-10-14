@@ -1,0 +1,1 @@
+Teste de permissao de escrita do ChatGPT no repositorio Gpt-script.
